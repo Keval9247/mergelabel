@@ -17,22 +17,6 @@ import type { CtaOptions } from "./types";
 
 export type { CtaOptions } from "./types";
 
-/** Fixed spacing; sizes/colors come from CtaDesign */
-const LAYOUT = {
-  /** Gap from page bottom edge (pt) */
-  bottomPad: 14,
-  /** Minimum side margin from page edges (pt) */
-  sidePad: 36,
-  borderWidth: 1,
-  innerPadX: 14,
-  iconSize: 28,
-  dividerInsetY: 12,
-  gapIconBrand: 10,
-  gapBrandDivider: 14,
-  gapDividerQr: 12,
-  gapQrText: 10,
-} as const;
-
 function toRgb(hex: string): RGB {
   const { r, g, b } = hexToPdfRgb(hex);
   return rgb(r, g, b);
@@ -53,11 +37,12 @@ export async function stampAndMergePdfs(
     throw new Error("ctaUrl is required");
   }
 
-  const brandName = options.brandName.trim().toUpperCase();
+  const design = mergeCtaDesign(options.design);
+  const brandRaw = options.brandName.trim();
+  const brandName = design.brandUppercase ? brandRaw.toUpperCase() : brandRaw;
   const ctaText =
     (options.ctaText ?? "Follow our page").trim() || "Follow our page";
-  const design = mergeCtaDesign(options.design);
-  const qrPngBytes = await qrDataUrlToPngBytes(options.ctaUrl.trim());
+  const qrPngBytes = await qrDataUrlToPngBytes(options.ctaUrl.trim(), design);
 
   const merged = await PDFDocument.create();
 
@@ -104,12 +89,18 @@ export function downloadPdf(bytes: Uint8Array, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-async function qrDataUrlToPngBytes(url: string): Promise<Uint8Array> {
+async function qrDataUrlToPngBytes(
+  url: string,
+  design: CtaDesign
+): Promise<Uint8Array> {
   const dataUrl = await QRCode.toDataURL(url, {
     errorCorrectionLevel: "M",
     margin: 1,
     width: 256,
-    color: { dark: "#000000", light: "#FFFFFF" },
+    color: {
+      dark: design.qrDarkColor,
+      light: design.qrLightColor,
+    },
   });
   const base64 = dataUrl.split(",")[1];
   if (!base64) {
@@ -135,40 +126,47 @@ function drawCtaBar(
   }
 ): void {
   const { width: pageWidth } = page.getSize();
-  const L = LAYOUT;
   const d = ctx.design;
 
   const bg = toRgb(d.backgroundColor);
   const border = toRgb(d.borderColor);
   const text = toRgb(d.textColor);
+  const icon = toRgb(d.iconColor);
+  const brandFont = d.brandBold ? ctx.fontBold : ctx.font;
 
-  const brandWidth = ctx.fontBold.widthOfTextAtSize(
-    ctx.brandName,
-    d.brandFontSize
-  );
+  const brandWidth = d.showBrand
+    ? brandFont.widthOfTextAtSize(ctx.brandName, d.brandFontSize)
+    : 0;
   const [ctaLine1, ctaLine2] = splitCtaText(ctx.ctaText);
-  const ctaTextWidth = Math.max(
-    ctx.font.widthOfTextAtSize(ctaLine1, d.ctaFontSize),
-    ctaLine2 ? ctx.font.widthOfTextAtSize(ctaLine2, d.ctaFontSize) : 0
-  );
+  const ctaTextWidth = d.showCtaText
+    ? Math.max(
+        ctx.font.widthOfTextAtSize(ctaLine1, d.ctaFontSize),
+        ctaLine2 ? ctx.font.widthOfTextAtSize(ctaLine2, d.ctaFontSize) : 0
+      )
+    : 0;
   const ctaLineHeight = d.ctaFontSize + 2;
 
   const brandBlockWidth =
-    (d.showIcon ? L.iconSize + L.gapIconBrand : 0) + brandWidth;
-  const qrBlockWidth = d.qrSize + L.gapQrText + ctaTextWidth;
-  const dividerWidth = d.showDivider
-    ? L.gapBrandDivider + L.borderWidth + L.gapDividerQr
-    : L.gapBrandDivider + L.gapDividerQr;
+    (d.showIcon ? d.iconSize + (d.showBrand ? d.gapIconBrand : 0) : 0) +
+    brandWidth;
+  const qrBlockWidth =
+    d.qrSize + (d.showCtaText ? d.gapQrText + ctaTextWidth : 0);
+  const hasBrandSide = d.showIcon || d.showBrand;
+  const dividerWidth = hasBrandSide
+    ? d.showDivider
+      ? d.gapAfterBrand + d.borderWidth + d.gapAfterDivider
+      : d.gapAfterBrand + d.gapAfterDivider
+    : 0;
 
   const contentWidth =
-    L.innerPadX + brandBlockWidth + dividerWidth + qrBlockWidth + L.innerPadX;
+    d.innerPadX + brandBlockWidth + dividerWidth + qrBlockWidth + d.innerPadX;
 
   const targetWidth = pageWidth * (d.widthPercent / 100);
-  const maxWidth = pageWidth - L.sidePad * 2;
+  const maxWidth = pageWidth - d.sidePad * 2;
   const boxWidth = Math.min(maxWidth, Math.max(targetWidth, contentWidth));
   const boxHeight = d.barHeight;
   const boxX = (pageWidth - boxWidth) / 2;
-  const boxY = L.bottomPad;
+  const boxY = d.bottomPad;
 
   drawRoundedRect(
     page,
@@ -178,45 +176,49 @@ function drawCtaBar(
     boxHeight,
     d.cornerRadius,
     bg,
-    border
+    border,
+    d.borderWidth
   );
 
   const midY = boxY + boxHeight / 2;
-  let cursorX = boxX + L.innerPadX;
+  let cursorX = boxX + d.innerPadX;
 
   const drawBrandBlock = () => {
     if (d.showIcon) {
       const iconX = cursorX;
-      const iconY = midY - L.iconSize / 2;
-      drawStorefrontIcon(page, iconX, iconY, L.iconSize, border, bg);
-      cursorX += L.iconSize + L.gapIconBrand;
+      const iconY = midY - d.iconSize / 2;
+      drawStorefrontIcon(page, iconX, iconY, d.iconSize, icon, bg);
+      cursorX += d.iconSize + (d.showBrand ? d.gapIconBrand : 0);
     }
 
-    const brandBaseline = midY - d.brandFontSize * 0.35;
-    page.drawText(ctx.brandName, {
-      x: cursorX,
-      y: brandBaseline,
-      size: d.brandFontSize,
-      font: ctx.fontBold,
-      color: text,
-    });
-    cursorX += brandWidth;
+    if (d.showBrand) {
+      const brandBaseline = midY - d.brandFontSize * 0.35;
+      page.drawText(ctx.brandName, {
+        x: cursorX,
+        y: brandBaseline,
+        size: d.brandFontSize,
+        font: brandFont,
+        color: text,
+      });
+      cursorX += brandWidth;
+    }
   };
 
   const drawDivider = () => {
-    cursorX += L.gapBrandDivider;
+    if (!hasBrandSide) return;
+    cursorX += d.gapAfterBrand;
     if (d.showDivider) {
-      const dividerTop = boxY + boxHeight - L.dividerInsetY;
-      const dividerBottom = boxY + L.dividerInsetY;
+      const dividerTop = boxY + boxHeight - d.dividerInset;
+      const dividerBottom = boxY + d.dividerInset;
       page.drawLine({
         start: { x: cursorX, y: dividerBottom },
         end: { x: cursorX, y: dividerTop },
-        thickness: L.borderWidth,
+        thickness: d.borderWidth,
         color: border,
       });
-      cursorX += L.borderWidth;
+      cursorX += d.borderWidth;
     }
-    cursorX += L.gapDividerQr;
+    cursorX += d.gapAfterDivider;
   };
 
   const drawQrBlock = () => {
@@ -227,22 +229,25 @@ function drawCtaBar(
       width: d.qrSize,
       height: d.qrSize,
     });
-    cursorX += d.qrSize + L.gapQrText;
+    cursorX += d.qrSize;
 
-    const lines = ctaLine2 ? [ctaLine1, ctaLine2] : [ctaLine1];
-    const blockHeight = lines.length * ctaLineHeight;
-    let textY = midY + blockHeight / 2 - d.ctaFontSize;
-    for (const line of lines) {
-      page.drawText(line, {
-        x: cursorX,
-        y: textY,
-        size: d.ctaFontSize,
-        font: ctx.font,
-        color: text,
-      });
-      textY -= ctaLineHeight;
+    if (d.showCtaText) {
+      cursorX += d.gapQrText;
+      const lines = ctaLine2 ? [ctaLine1, ctaLine2] : [ctaLine1];
+      const blockHeight = lines.length * ctaLineHeight;
+      let textY = midY + blockHeight / 2 - d.ctaFontSize;
+      for (const line of lines) {
+        page.drawText(line, {
+          x: cursorX,
+          y: textY,
+          size: d.ctaFontSize,
+          font: ctx.font,
+          color: text,
+        });
+        textY -= ctaLineHeight;
+      }
+      cursorX += ctaTextWidth;
     }
-    cursorX += ctaTextWidth;
   };
 
   if (d.layout === "qr-left") {
@@ -279,7 +284,8 @@ function drawRoundedRect(
   h: number,
   r: number,
   fill: RGB,
-  stroke: RGB
+  stroke: RGB,
+  borderWidth: number
 ): void {
   const radius = Math.min(r, w / 2, h / 2);
   const path = [
@@ -299,7 +305,7 @@ function drawRoundedRect(
     x,
     y: y + h,
     borderColor: stroke,
-    borderWidth: LAYOUT.borderWidth,
+    borderWidth,
     color: fill,
   });
 }
@@ -316,7 +322,7 @@ function drawStorefrontIcon(
   strokeColor: RGB,
   fillColor: RGB
 ): void {
-  const stroke = 1.2;
+  const stroke = Math.max(1, size * 0.04);
   const s = size;
   const awningBand = s * 0.16;
   const scallopY = s * 0.3;

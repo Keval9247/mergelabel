@@ -53,6 +53,79 @@ const CtaDesignSchema = new Schema(
       enum: ["brand-left", "qr-left"],
       default: DEFAULT_CTA_DESIGN.layout,
     },
+    showBrand: {
+      type: Boolean,
+      default: DEFAULT_CTA_DESIGN.showBrand,
+    },
+    showCtaText: {
+      type: Boolean,
+      default: DEFAULT_CTA_DESIGN.showCtaText,
+    },
+    iconSize: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.iconSize,
+    },
+    borderWidth: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.borderWidth,
+    },
+    innerPadX: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.innerPadX,
+    },
+    bottomPad: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.bottomPad,
+    },
+    sidePad: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.sidePad,
+    },
+    gapIconBrand: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.gapIconBrand,
+    },
+    gapAfterBrand: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.gapAfterBrand,
+    },
+    gapAfterDivider: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.gapAfterDivider,
+    },
+    gapQrText: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.gapQrText,
+    },
+    brandUppercase: {
+      type: Boolean,
+      default: DEFAULT_CTA_DESIGN.brandUppercase,
+    },
+    brandBold: {
+      type: Boolean,
+      default: DEFAULT_CTA_DESIGN.brandBold,
+    },
+    dividerInset: {
+      type: Number,
+      default: DEFAULT_CTA_DESIGN.dividerInset,
+    },
+    iconColor: {
+      type: String,
+      default: DEFAULT_CTA_DESIGN.iconColor,
+    },
+    qrDarkColor: {
+      type: String,
+      default: DEFAULT_CTA_DESIGN.qrDarkColor,
+    },
+    qrLightColor: {
+      type: String,
+      default: DEFAULT_CTA_DESIGN.qrLightColor,
+    },
+    previewPageSize: {
+      type: String,
+      enum: ["a4-invoice", "thermal-4x6"],
+      default: DEFAULT_CTA_DESIGN.previewPageSize,
+    },
   },
   { _id: false },
 );

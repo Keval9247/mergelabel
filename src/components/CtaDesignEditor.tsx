@@ -3,9 +3,11 @@
 import { useState } from "react";
 import {
   DEFAULT_CTA_DESIGN,
+  LABEL_SIZE_PRESETS,
   mergeCtaDesign,
   type CtaDesign,
   type CtaLayout,
+  type LabelSizeId,
 } from "@/lib/cta-design";
 import { notify } from "@/lib/toast";
 import CtaPreview from "@/components/CtaPreview";
@@ -24,6 +26,17 @@ const labelClass = "flex flex-col gap-1.5 text-sm";
 const labelTextClass = "font-medium text-[var(--foreground)]";
 const inputClass =
   "h-10 w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 text-sm text-[var(--foreground)] outline-none transition-colors focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent-ring)] disabled:opacity-60";
+const sectionHeadingClass =
+  "text-xs font-semibold uppercase tracking-wide text-[var(--muted)]";
+
+const PREVIEW_SIZE_OPTIONS: { id: LabelSizeId; label: string }[] = [
+  { id: "a4-invoice", label: "Test order · A4" },
+  { id: "label-4x6", label: "Test label · 4×6" },
+];
+
+function maxQrForBar(barHeight: number) {
+  return Math.max(28, barHeight - 8);
+}
 
 function SliderRow({
   label,
@@ -103,6 +116,31 @@ function ColorRow({
   );
 }
 
+function ToggleRow({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 accent-[var(--accent)]"
+      />
+      {label}
+    </label>
+  );
+}
+
 export default function CtaDesignEditor({
   brandName,
   ctaText,
@@ -117,7 +155,17 @@ export default function CtaDesignEditor({
   );
 
   function patch(partial: Partial<CtaDesign>) {
-    setDesign((prev) => ({ ...prev, ...partial }));
+    setDesign((prev) => {
+      const next = { ...prev, ...partial };
+      const limit = maxQrForBar(next.barHeight);
+      if (next.qrSize > limit) {
+        if (partial.qrSize !== undefined && partial.qrSize > limit) {
+          notify.info(`QR size capped at ${limit} pt (bar height − 8)`);
+        }
+        next.qrSize = limit;
+      }
+      return next;
+    });
   }
 
   function handleReset() {
@@ -144,6 +192,11 @@ export default function CtaDesignEditor({
     await onSave(next);
   }
 
+  const previewSizeValue: LabelSizeId =
+    design.previewLabelSize in LABEL_SIZE_PRESETS
+      ? design.previewLabelSize
+      : DEFAULT_CTA_DESIGN.previewLabelSize;
+
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
       <div className="border-b border-[var(--border)] px-5 py-4">
@@ -155,7 +208,7 @@ export default function CtaDesignEditor({
         </p>
       </div>
 
-      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:items-start">
+      <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(360px,1.1fr)] lg:items-start">
         {/* Mobile: preview on top */}
         <div className="order-1 lg:order-2 lg:sticky lg:top-6">
           <CtaPreview
@@ -166,122 +219,257 @@ export default function CtaDesignEditor({
           />
         </div>
 
-        {/* Controls */}
-        <div className="order-2 flex flex-col gap-5 lg:order-1">
-          <section className="grid gap-4 sm:grid-cols-3">
-            <ColorRow
-              label="Background"
-              value={design.backgroundColor}
-              disabled={busy}
-              onChange={(backgroundColor) => patch({ backgroundColor })}
-            />
-            <ColorRow
-              label="Border"
-              value={design.borderColor}
-              disabled={busy}
-              onChange={(borderColor) => patch({ borderColor })}
-            />
-            <ColorRow
-              label="Text"
-              value={design.textColor}
-              disabled={busy}
-              onChange={(textColor) => patch({ textColor })}
-            />
+        {/* Controls ~40% */}
+        <div className="order-2 flex flex-col gap-6 lg:order-1">
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Colors</h3>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <ColorRow
+                label="Background"
+                value={design.backgroundColor}
+                disabled={busy}
+                onChange={(backgroundColor) => patch({ backgroundColor })}
+              />
+              <ColorRow
+                label="Border"
+                value={design.borderColor}
+                disabled={busy}
+                onChange={(borderColor) => patch({ borderColor })}
+              />
+              <ColorRow
+                label="Text"
+                value={design.textColor}
+                disabled={busy}
+                onChange={(textColor) => patch({ textColor })}
+              />
+            </div>
           </section>
 
-          <section className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
-              <input
-                type="checkbox"
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Content</h3>
+            <div className="flex flex-wrap gap-x-5 gap-y-3">
+              <ToggleRow
+                label="Show icon"
                 checked={design.showIcon}
                 disabled={busy}
-                onChange={(e) => patch({ showIcon: e.target.checked })}
-                className="size-4 accent-[var(--accent)]"
+                onChange={(showIcon) => patch({ showIcon })}
               />
-              Show icon
-            </label>
-            <label className="flex items-center gap-2 text-sm text-[var(--foreground)]">
-              <input
-                type="checkbox"
+              <ToggleRow
+                label="Show divider"
                 checked={design.showDivider}
                 disabled={busy}
-                onChange={(e) => patch({ showDivider: e.target.checked })}
-                className="size-4 accent-[var(--accent)]"
+                onChange={(showDivider) => patch({ showDivider })}
               />
-              Show divider
+              <ToggleRow
+                label="Show CTA text"
+                checked={design.showCtaText}
+                disabled={busy}
+                onChange={(showCtaText) => patch({ showCtaText })}
+              />
+              <ToggleRow
+                label="Brand uppercase"
+                checked={design.brandUppercase}
+                disabled={busy}
+                onChange={(brandUppercase) => patch({ brandUppercase })}
+              />
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Layout</h3>
+            <label className={labelClass}>
+              <span className={labelTextClass}>Bar layout</span>
+              <select
+                value={design.layout}
+                disabled={busy}
+                onChange={(e) =>
+                  patch({ layout: e.target.value as CtaLayout })
+                }
+                className={inputClass}
+              >
+                <option value="brand-left">Brand left · QR right</option>
+                <option value="qr-left">QR left · Brand right</option>
+              </select>
             </label>
           </section>
 
-          <label className={labelClass}>
-            <span className={labelTextClass}>Layout</span>
-            <select
-              value={design.layout}
-              disabled={busy}
-              onChange={(e) =>
-                patch({ layout: e.target.value as CtaLayout })
-              }
-              className={inputClass}
-            >
-              <option value="brand-left">Brand left · QR right</option>
-              <option value="qr-left">QR left · Brand right</option>
-            </select>
-          </label>
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Size</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SliderRow
+                label="Bar height"
+                value={design.barHeight}
+                min={48}
+                max={96}
+                unit=" pt"
+                disabled={busy}
+                onChange={(barHeight) => patch({ barHeight })}
+              />
+              <SliderRow
+                label="Width"
+                value={design.widthPercent}
+                min={45}
+                max={95}
+                unit="%"
+                disabled={busy}
+                onChange={(widthPercent) => patch({ widthPercent })}
+              />
+              <SliderRow
+                label="Corner radius"
+                value={design.cornerRadius}
+                min={0}
+                max={20}
+                unit=" pt"
+                disabled={busy}
+                onChange={(cornerRadius) => patch({ cornerRadius })}
+              />
+              <SliderRow
+                label="Border width"
+                value={design.borderWidth}
+                min={0}
+                max={4}
+                unit=" pt"
+                disabled={busy}
+                onChange={(borderWidth) => patch({ borderWidth })}
+              />
+              <SliderRow
+                label="QR size"
+                value={design.qrSize}
+                min={28}
+                max={72}
+                unit=" pt"
+                disabled={busy}
+                onChange={(qrSize) => patch({ qrSize })}
+              />
+              <SliderRow
+                label="Icon size"
+                value={design.iconSize}
+                min={12}
+                max={48}
+                unit=" pt"
+                disabled={busy}
+                onChange={(iconSize) => patch({ iconSize })}
+              />
+            </div>
+          </section>
 
-          <section className="grid gap-4 sm:grid-cols-2">
-            <SliderRow
-              label="Bar height"
-              value={design.barHeight}
-              min={48}
-              max={96}
-              unit=" pt"
-              disabled={busy}
-              onChange={(barHeight) => patch({ barHeight })}
-            />
-            <SliderRow
-              label="QR size"
-              value={design.qrSize}
-              min={28}
-              max={72}
-              unit=" pt"
-              disabled={busy}
-              onChange={(qrSize) => patch({ qrSize })}
-            />
-            <SliderRow
-              label="Corner radius"
-              value={design.cornerRadius}
-              min={0}
-              max={20}
-              unit=" pt"
-              disabled={busy}
-              onChange={(cornerRadius) => patch({ cornerRadius })}
-            />
-            <SliderRow
-              label="Width"
-              value={design.widthPercent}
-              min={45}
-              max={95}
-              unit="%"
-              disabled={busy}
-              onChange={(widthPercent) => patch({ widthPercent })}
-            />
-            <SliderRow
-              label="Brand font"
-              value={design.brandFontSize}
-              min={8}
-              max={18}
-              unit=" pt"
-              disabled={busy}
-              onChange={(brandFontSize) => patch({ brandFontSize })}
-            />
-            <SliderRow
-              label="CTA font"
-              value={design.ctaFontSize}
-              min={8}
-              max={16}
-              unit=" pt"
-              disabled={busy}
-              onChange={(ctaFontSize) => patch({ ctaFontSize })}
-            />
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Type</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SliderRow
+                label="Brand font"
+                value={design.brandFontSize}
+                min={8}
+                max={18}
+                unit=" pt"
+                disabled={busy}
+                onChange={(brandFontSize) => patch({ brandFontSize })}
+              />
+              <SliderRow
+                label="CTA font"
+                value={design.ctaFontSize}
+                min={8}
+                max={16}
+                unit=" pt"
+                disabled={busy}
+                onChange={(ctaFontSize) => patch({ ctaFontSize })}
+              />
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Spacing</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <SliderRow
+                label="Inner pad X"
+                value={design.innerPadX}
+                min={4}
+                max={40}
+                unit=" pt"
+                disabled={busy}
+                onChange={(innerPadX) => patch({ innerPadX })}
+              />
+              <SliderRow
+                label="Bottom pad"
+                value={design.bottomPad}
+                min={0}
+                max={48}
+                unit=" pt"
+                disabled={busy}
+                onChange={(bottomPad) => patch({ bottomPad })}
+              />
+              <SliderRow
+                label="Side pad"
+                value={design.sidePad}
+                min={8}
+                max={72}
+                unit=" pt"
+                disabled={busy}
+                onChange={(sidePad) => patch({ sidePad })}
+              />
+              <SliderRow
+                label="Gap icon · brand"
+                value={design.gapIconBrand}
+                min={0}
+                max={32}
+                unit=" pt"
+                disabled={busy}
+                onChange={(gapIconBrand) => patch({ gapIconBrand })}
+              />
+              <SliderRow
+                label="Gap after brand"
+                value={design.gapSections}
+                min={0}
+                max={40}
+                unit=" pt"
+                disabled={busy}
+                onChange={(gapSections) => patch({ gapSections })}
+              />
+              <SliderRow
+                label="Gap QR · text"
+                value={design.gapQrText}
+                min={0}
+                max={32}
+                unit=" pt"
+                disabled={busy}
+                onChange={(gapQrText) => patch({ gapQrText })}
+              />
+              <SliderRow
+                label="Divider inset"
+                value={design.dividerInset}
+                min={0}
+                max={32}
+                unit=" pt"
+                disabled={busy}
+                onChange={(dividerInset) => patch({ dividerInset })}
+              />
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-3">
+            <h3 className={sectionHeadingClass}>Preview size</h3>
+            <label className={labelClass}>
+              <span className={labelTextClass}>Page mock</span>
+              <select
+                value={previewSizeValue}
+                disabled={busy}
+                onChange={(e) =>
+                  patch({ previewLabelSize: e.target.value as LabelSizeId })
+                }
+                className={inputClass}
+              >
+                {PREVIEW_SIZE_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {opt.label}
+                  </option>
+                ))}
+                {previewSizeValue === "a5" ? (
+                  <option value="a5">
+                    {LABEL_SIZE_PRESETS.a5.label}
+                  </option>
+                ) : null}
+              </select>
+            </label>
           </section>
 
           <div className="flex flex-col-reverse gap-2 border-t border-[var(--border)] pt-4 sm:flex-row sm:flex-wrap sm:items-center">

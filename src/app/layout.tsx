@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AppHeader from "@/components/AppHeader";
 import AppToaster from "@/components/AppToaster";
+import PasswordGate from "@/components/PasswordGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -27,13 +28,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-[var(--background)] text-[var(--foreground)]">
-        <AppHeader />
-        <main className="flex min-h-0 flex-1 flex-col">{children}</main>
-        <footer className="border-t border-[var(--border)] bg-[var(--surface)]">
-          <p className="mx-auto max-w-5xl px-4 py-3 text-center text-xs text-[var(--muted)] sm:px-6">
-            MergeLabel · stamp CTA · merge PDFs
-          </p>
-        </footer>
+        <PasswordGate>
+          <AppHeader />
+          <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+          <footer className="border-t border-[var(--border)] bg-[var(--surface)]">
+            <p className="mx-auto max-w-5xl px-4 py-3 text-center text-xs text-[var(--muted)] sm:px-6">
+              MergeLabel · stamp CTA · merge PDFs
+            </p>
+          </footer>
+        </PasswordGate>
         <AppToaster />
       </body>
     </html>

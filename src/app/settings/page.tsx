@@ -285,7 +285,7 @@ export default function SettingsPage() {
     <div className="min-h-full flex-1 bg-[var(--page-bg)]">
       <div
         className={`mx-auto w-full px-4 py-8 sm:px-6 sm:py-10 ${
-          designPanelOpen ? "max-w-5xl" : "max-w-3xl"
+          designPanelOpen ? "max-w-6xl" : "max-w-3xl"
         }`}
       >
         <header className="mb-8 flex flex-col gap-4 border-b border-[var(--border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
