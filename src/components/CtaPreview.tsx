@@ -2,96 +2,45 @@
 
 import { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
-import { DEFAULT_CTA_DESIGN, type CtaDesign, type CtaLayout } from "@/lib/cta-design";
 import {
-  PREVIEW_DISPLAY_WIDTH_PX,
-  resolveLabelPageSize,
-  type PreviewPageSizeId,
-} from "@/lib/label-sizes";
+  LABEL_SIZE_PRESETS,
+  type CtaDesign,
+  type LabelSizeId,
+} from "@/lib/cta-design";
 
-/**
- * Scale: design & page sizes are PDF points (1pt = 1/72 in).
- * Display maps A4 595pt → ~480–520 CSS px so a 65% bar and 42pt QR
- * stay in true proportion to the page (same as PDF stamp).
- */
-const DISPLAY_PX_PER_PT = PREVIEW_DISPLAY_WIDTH_PX / 595;
+/** CSS px per PDF point so A4 595pt ≈ 520px wide. */
+const DISPLAY_PX_PER_PT = 520 / 595;
 
 type CtaPreviewProps = {
   brandName: string;
   ctaText: string;
   ctaUrl: string;
   design: CtaDesign;
-  /** Overrides design.previewPageSize / previewLabelSize when set */
-  pageSizeOverride?: PreviewPageSizeId | string;
+  pageSizeOverride?: LabelSizeId;
 };
-
-type DesignLoose = Partial<CtaDesign> & {
-  previewPageSize?: unknown;
-  previewLabelSize?: unknown;
-  pageSize?: unknown;
-};
-
-function pickPageSizeId(
-  design: CtaDesign,
-  pageSizeOverride?: string,
-): unknown {
-  if (pageSizeOverride) return pageSizeOverride;
-  const d = design as DesignLoose;
-  return d.previewPageSize ?? d.previewLabelSize ?? d.pageSize;
-}
-
-function num(v: unknown, fallback: number): number {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-function str(v: unknown, fallback: string): string {
-  return typeof v === "string" && v.length > 0 ? v : fallback;
-}
-
-function bool(v: unknown, fallback: boolean): boolean {
-  return typeof v === "boolean" ? v : fallback;
-}
-
-/** Safe reads for every CtaDesign field (partial/legacy designs OK). */
-function resolveDesign(design: CtaDesign) {
-  const d = design as DesignLoose;
-  const def = DEFAULT_CTA_DESIGN;
-  const textColor = str(d.textColor, def.textColor);
-  return {
-    backgroundColor: str(d.backgroundColor, def.backgroundColor),
-    borderColor: str(d.borderColor, def.borderColor),
-    textColor,
-    showIcon: bool(d.showIcon, def.showIcon),
-    showDivider: bool(d.showDivider, def.showDivider),
-    barHeight: num(d.barHeight, def.barHeight),
-    qrSize: num(d.qrSize, def.qrSize),
-    cornerRadius: num(d.cornerRadius, def.cornerRadius),
-    widthPercent: num(d.widthPercent, def.widthPercent),
-    brandFontSize: num(d.brandFontSize, def.brandFontSize),
-    ctaFontSize: num(d.ctaFontSize, def.ctaFontSize),
-    layout: (d.layout === "qr-left" ? "qr-left" : "brand-left") as CtaLayout,
-    showBrand: bool(d.showBrand, def.showBrand),
-    showCtaText: bool(d.showCtaText, def.showCtaText),
-    iconSize: num(d.iconSize, def.iconSize),
-    borderWidth: num(d.borderWidth, def.borderWidth),
-    innerPadX: num(d.innerPadX, def.innerPadX),
-    bottomPad: num(d.bottomPad, def.bottomPad),
-    sidePad: num(d.sidePad, def.sidePad),
-    gapIconBrand: num(d.gapIconBrand, def.gapIconBrand),
-    gapSections: num(d.gapSections, def.gapSections),
-    gapQrText: num(d.gapQrText, def.gapQrText),
-    brandUppercase: bool(d.brandUppercase, def.brandUppercase),
-    brandBold: bool(d.brandBold, def.brandBold),
-    dividerInset: num(d.dividerInset, def.dividerInset),
-    iconColor: str(d.iconColor, textColor),
-    qrDarkColor: str(d.qrDarkColor, def.qrDarkColor),
-    qrLightColor: str(d.qrLightColor, def.qrLightColor),
-  };
-}
 
 function pt(n: number) {
   return n * DISPLAY_PX_PER_PT;
+}
+
+function resolveSizeId(
+  design: CtaDesign,
+  pageSizeOverride?: LabelSizeId,
+): LabelSizeId {
+  if (pageSizeOverride && pageSizeOverride in LABEL_SIZE_PRESETS) {
+    return pageSizeOverride;
+  }
+
+  const fromDesign =
+    (design as CtaDesign & { previewLabelSize?: string }).previewLabelSize ??
+    design.previewPageSize;
+
+  if (fromDesign === "a4-invoice") return "a4-invoice";
+  if (fromDesign === "a5") return "a5";
+  if (fromDesign === "label-4x6" || fromDesign === "thermal-4x6") {
+    return "label-4x6";
+  }
+  return "a4-invoice";
 }
 
 function splitCtaText(text: string): [string, string] {
@@ -112,7 +61,6 @@ function StorefrontIcon({ size, color }: { size: number; color: string }) {
       viewBox="0 0 28 28"
       fill="none"
       aria-hidden
-      style={{ flexShrink: 0 }}
     >
       <path
         d="M4 12h20l-1.5 13H5.5L4 12Z"
@@ -137,223 +85,147 @@ function StorefrontIcon({ size, color }: { size: number; color: string }) {
   );
 }
 
-function InvoiceBody({ soldBy }: { soldBy: string }) {
-  const line = "#222";
-  const muted = "#555";
+function TaxInvoiceBody() {
   return (
-    <div className="space-y-2 font-sans text-[#1a1a1a]" style={{ fontSize: pt(8) }}>
-      {/* Product details header strip */}
-      <div
-        className="grid grid-cols-5 border"
-        style={{ borderColor: line, fontSize: pt(7) }}
-      >
-        {(
-          [
-            ["SKU", "AC Cover - 1.0 ton"],
-            ["Size", "Free Size"],
-            ["Qty", "1"],
-            ["Color", "Multicolor"],
-            ["Order No.", "333633330543727296_1"],
-          ] as const
-        ).map(([h, v]) => (
-          <div
-            key={h}
-            className="border-r px-1.5 py-1 last:border-r-0"
-            style={{ borderColor: line }}
-          >
-            <div className="font-bold">{h}</div>
-            <div style={{ color: muted }}>{v}</div>
+    <div className="space-y-3 text-[10px] leading-snug text-[#1a1a1a]">
+      <div className="flex items-start justify-between gap-3 border-b border-black pb-2">
+        <div>
+          <div className="text-[13px] font-bold tracking-wide">TAX INVOICE</div>
+          <div className="text-[#444]">
+            Test order preview · not a real invoice
           </div>
-        ))}
-      </div>
-
-      <div className="relative py-0.5 text-center">
-        <div className="font-bold tracking-wide" style={{ fontSize: pt(12) }}>
-          TAX INVOICE
         </div>
-        <div
-          className="absolute right-0 top-1"
-          style={{ fontSize: pt(6.5), color: muted }}
-        >
-          Original For Recipient
+        <div className="text-right text-[9px] text-[#444]">
+          <div>Order No: ORD-TEST-88421</div>
+          <div>Invoice No: INV-TEST-1024</div>
+          <div>Date: 22/09/2026</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2" style={{ fontSize: pt(7.5) }}>
-        <div className="border p-2" style={{ borderColor: line }}>
-          <div className="mb-1 font-bold">BILL TO / SHIP TO</div>
-          <div className="font-semibold">Priya Sharma</div>
-          <div style={{ color: muted }}>
-            B-204, Shree Ram Residency, Near Science City Road, Sola,
-            Ahmedabad, Gujarat – 380060
-          </div>
-          <div className="mt-1" style={{ color: muted }}>
-            Phone: 98XXXXXX12
-          </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded border border-[#ccc] p-2">
+          <div className="mb-1 font-semibold">Sold by</div>
+          <div>Green Bharat Enterprise</div>
+          <div>GSTIN: 23XXXXX1234X1Z5</div>
+          <div>State: Madhya Pradesh (23)</div>
         </div>
-        <div className="border p-2" style={{ borderColor: line }}>
-          <div className="mb-1 font-bold">Sold by</div>
-          <div className="font-semibold uppercase">{soldBy}</div>
-          <div style={{ color: muted }}>
-            GREEN BHARAT ENTERPRISE
-            <br />
-            Plot 12, Ring Road, Surat, Gujarat – 395002
-          </div>
-          <div className="mt-1" style={{ color: muted }}>
-            GSTIN: 24XXXXX1234X1Z5
-            <br />
-            Invoice Date: 18-09-2026 · Order Date: 17-09-2026
-          </div>
+        <div className="rounded border border-[#ccc] p-2">
+          <div className="mb-1 font-semibold">Bill to / Ship to</div>
+          <div>Rahul Sharma</div>
+          <div>12 MG Road, Near Palasia Square</div>
+          <div>Indore, Madhya Pradesh 452001</div>
+          <div>Phone: 98XXXXXX10</div>
         </div>
       </div>
 
-      <table
-        className="w-full border-collapse"
-        style={{ fontSize: pt(6.5), borderColor: line }}
-      >
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded border border-[#ccc] p-2">
+          <div className="mb-1 font-semibold">Product details</div>
+          <div>SKU: AC Cover · Size: 1 Ton</div>
+          <div>Color: Multicolor · Qty: 1</div>
+          <div>HSN: 6304</div>
+        </div>
+        <div className="rounded border border-[#ccc] p-2">
+          <div className="mb-1 font-semibold">Payment</div>
+          <div>Mode: Prepaid (UPI)</div>
+          <div>Subtotal: ₹109.00</div>
+          <div>Tax: ₹20.00 · Total: ₹129.00</div>
+        </div>
+      </div>
+
+      <table className="w-full border-collapse text-[9px]">
         <thead>
           <tr className="bg-[#f3f3f3]">
-            {[
-              "Description",
-              "HSN",
-              "Qty",
-              "Gross",
-              "Disc.",
-              "Taxable",
-              "Taxes",
-              "Total",
-            ].map((h) => (
-              <th
-                key={h}
-                className="border px-1 py-1 text-left font-bold"
-                style={{ borderColor: line }}
-              >
-                {h}
-              </th>
-            ))}
+            {["Description", "Qty", "Taxable", "CGST", "SGST", "Total"].map(
+              (h) => (
+                <th
+                  key={h}
+                  className="border border-[#bbb] px-1.5 py-1 text-left font-semibold"
+                >
+                  {h}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              Green Bharat Enterprise 1 Ton Split AC Cover Waterproof…
+            <td className="border border-[#bbb] px-1.5 py-1">
+              Green Bharat AC Cover — 1 Ton, Multicolor
             </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              6304
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              1
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              499.00
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              50.00
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              427.62
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              SGST @2.5%
-              <br />
-              CGST @2.5%
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              449.00
-            </td>
-          </tr>
-          <tr>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              Other Charges
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }} />
-            <td className="border px-1 py-1" style={{ borderColor: line }} />
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              0.00
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              0.00
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              0.00
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              —
-            </td>
-            <td className="border px-1 py-1" style={{ borderColor: line }}>
-              0.00
-            </td>
+            <td className="border border-[#bbb] px-1.5 py-1">1</td>
+            <td className="border border-[#bbb] px-1.5 py-1">₹109.00</td>
+            <td className="border border-[#bbb] px-1.5 py-1">₹10.00</td>
+            <td className="border border-[#bbb] px-1.5 py-1">₹10.00</td>
+            <td className="border border-[#bbb] px-1.5 py-1">₹129.00</td>
           </tr>
         </tbody>
       </table>
 
-      <div className="flex justify-end gap-6 font-bold" style={{ fontSize: pt(8) }}>
-        <span>Total Qty: 1</span>
-        <span>Grand Total: ₹449.00</span>
+      <div className="flex justify-end">
+        <div className="min-w-[140px] space-y-0.5 text-[9px]">
+          <div className="flex justify-between gap-6">
+            <span>Taxable amount</span>
+            <span>₹109.00</span>
+          </div>
+          <div className="flex justify-between gap-6">
+            <span>Total tax</span>
+            <span>₹20.00</span>
+          </div>
+          <div className="flex justify-between gap-6 border-t border-black pt-1 font-bold">
+            <span>Grand total</span>
+            <span>₹129.00</span>
+          </div>
+        </div>
       </div>
 
-      <p style={{ fontSize: pt(6), color: muted }}>
-        Tax is not payable on reverse charge basis. This is a computer generated
-        invoice and does not require a signature. Sample test order for CTA
-        placement only.
+      <p className="text-[8px] text-[#666]">
+        Tax is not payable on reverse charge basis. This is a sample test order
+        layout for CTA placement only — not a valid tax document.
       </p>
     </div>
   );
 }
 
-function ThermalBody({ soldBy }: { soldBy: string }) {
-  const line = "#222";
+function ShippingLabelBody() {
   return (
-    <div className="space-y-2 font-sans text-[#1a1a1a]" style={{ fontSize: pt(9) }}>
-      <div
-        className="flex items-start justify-between border-b pb-1.5"
-        style={{ borderColor: line }}
-      >
-        <div>
-          <div className="font-bold" style={{ fontSize: pt(11) }}>
-            SHIPPING LABEL
-          </div>
-          <div style={{ fontSize: pt(7), color: "#555" }}>
-            Test 4×6 in · Delhivery
-          </div>
-        </div>
-        <div className="font-mono font-bold">PREPAID</div>
+    <div className="space-y-2 text-[9px] leading-snug text-[#222]">
+      <div className="flex items-center justify-between border-b-2 border-black pb-1.5">
+        <span className="text-[11px] font-bold tracking-wide">
+          SHIPPING LABEL
+        </span>
+        <span className="font-mono text-[8px]">TEST-4x6</span>
       </div>
 
-      <div className="border p-2" style={{ borderColor: line }}>
-        <div className="mb-0.5 font-bold uppercase" style={{ fontSize: pt(7) }}>
-          Ship To
+      <div className="rounded border border-black p-1.5">
+        <div className="text-[8px] font-semibold uppercase text-[#555]">
+          Ship to
         </div>
-        <div className="font-semibold">Priya Sharma</div>
-        <div style={{ fontSize: pt(8), color: "#444" }}>
-          B-204, Shree Ram Residency, Sola, Ahmedabad, GJ 380060
+        <div className="text-[11px] font-bold">Rahul Sharma</div>
+        <div>12 MG Road, Near Palasia Square</div>
+        <div>Indore, MP 452001</div>
+        <div>Phone: 98XXXXXX10</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="border border-[#999] p-1.5">
+          <div className="font-semibold">Order</div>
+          <div>ORD-TEST-88421</div>
+          <div>SKU: AC Cover</div>
+          <div>Qty: 1</div>
         </div>
-        <div className="mt-0.5 font-mono" style={{ fontSize: pt(8) }}>
-          Ph: 98XXXXXX12
+        <div className="border border-[#999] p-1.5">
+          <div className="font-semibold">Payment</div>
+          <div>COD: ₹129.00</div>
+          <div>Weight: 0.4 kg</div>
         </div>
       </div>
 
-      <div
-        className="flex h-12 items-center justify-center border border-dashed font-mono tracking-widest"
-        style={{ borderColor: line, fontSize: pt(12) }}
-      >
-        ||||| |||| ||||| |||| |||||
+      <div className="border-t border-dashed border-[#999] pt-1.5 font-semibold">
+        Sold by: Green Bharat Enterprise
       </div>
-      <div className="text-center font-mono" style={{ fontSize: pt(8) }}>
-        7X9K2M4P8Q1R
-      </div>
-
-      <div className="grid grid-cols-2 gap-1.5" style={{ fontSize: pt(7.5) }}>
-        <div className="border p-1.5" style={{ borderColor: line }}>
-          <div className="font-bold">From / Sold by</div>
-          <div className="uppercase">{soldBy}</div>
-          <div style={{ color: "#555" }}>Surat, GJ</div>
-        </div>
-        <div className="border p-1.5" style={{ borderColor: line }}>
-          <div className="font-bold">Order</div>
-          <div>333633330543727296_1</div>
-          <div style={{ color: "#555" }}>Qty 1 · AC Cover</div>
-        </div>
+      <div className="text-[8px] text-[#555]">
+        Handle with care · Keep dry · Test label for CTA preview
       </div>
     </div>
   );
@@ -367,16 +239,11 @@ export default function CtaPreview({
   pageSizeOverride,
 }: CtaPreviewProps) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const d = resolveDesign(design);
 
-  const page = useMemo(
-    () => resolveLabelPageSize(pickPageSizeId(design, pageSizeOverride)),
-    [design, pageSizeOverride],
-  );
-
-  const pageW = pt(page.widthPt);
-  const pageH = pt(page.heightPt);
-  const isThermal = page.kind === "thermal";
+  const sizeId = resolveSizeId(design, pageSizeOverride);
+  const preset = LABEL_SIZE_PRESETS[sizeId];
+  const pageW = pt(preset.widthPt);
+  const pageH = pt(preset.heightPt);
 
   useEffect(() => {
     let cancelled = false;
@@ -390,7 +257,10 @@ export default function CtaPreview({
       errorCorrectionLevel: "M",
       margin: 1,
       width: 256,
-      color: { dark: d.qrDarkColor, light: d.qrLightColor },
+      color: {
+        dark: design.qrDarkColor || "#000000",
+        light: design.qrLightColor || "#ffffff",
+      },
     })
       .then((dataUrl) => {
         if (!cancelled) setQrDataUrl(dataUrl);
@@ -402,56 +272,72 @@ export default function CtaPreview({
     return () => {
       cancelled = true;
     };
-  }, [ctaUrl, d.qrDarkColor, d.qrLightColor]);
+  }, [ctaUrl, design.qrDarkColor, design.qrLightColor]);
 
   const dims = useMemo(() => {
-    const barH = pt(d.barHeight);
-    const qrSize = pt(Math.min(d.qrSize, d.barHeight - 8));
-    const sidePad = pt(d.sidePad);
+    const barH = pt(design.barHeight);
+    const qrSize = pt(Math.min(design.qrSize, design.barHeight - 8));
+    const iconSize = pt(design.iconSize);
+    const brandFs = pt(design.brandFontSize);
+    const ctaFs = pt(design.ctaFontSize);
+    const radius = pt(design.cornerRadius);
+    const borderW = Math.max(
+      pt(design.borderWidth),
+      design.borderWidth > 0 ? 1 : 0,
+    );
+    const innerPadX = pt(design.innerPadX);
+    const bottomPad = pt(design.bottomPad);
+    const sidePad = pt(design.sidePad);
     const maxBarW = pageW - sidePad * 2;
-    const barW = Math.min(maxBarW, (pageW * d.widthPercent) / 100);
-    const borderW = d.borderWidth > 0 ? Math.max(pt(d.borderWidth), 0.75) : 0;
+    const barW = Math.min(maxBarW, (pageW * design.widthPercent) / 100);
+
+    const gapAfterBrand = pt(design.gapAfterBrand);
+    const gapAfterDivider = pt(design.gapAfterDivider);
+
     return {
       barH,
       qrSize,
-      iconSize: pt(d.iconSize),
-      brandFs: pt(d.brandFontSize),
-      ctaFs: pt(d.ctaFontSize),
-      radius: pt(d.cornerRadius),
+      iconSize,
+      brandFs,
+      ctaFs,
+      radius,
       borderW,
-      innerPadX: pt(d.innerPadX),
-      bottomPad: pt(d.bottomPad),
+      innerPadX,
+      bottomPad,
       sidePad,
       barW,
-      gapIconBrand: pt(d.gapIconBrand),
-      gapSections: pt(d.gapSections),
-      gapQrText: pt(d.gapQrText),
-      dividerInset: pt(d.dividerInset),
+      gapIconBrand: pt(design.gapIconBrand),
+      gapAfterBrand,
+      gapAfterDivider,
+      gapQrText: pt(design.gapQrText),
+      dividerInset: pt(design.dividerInset),
     };
-  }, [d, pageW]);
+  }, [design, pageW]);
 
-  const brandRaw = brandName.trim() || "GREEN BHARAT ENTERPRISE";
-  const brand = d.brandUppercase ? brandRaw.toUpperCase() : brandRaw;
+  const brandRaw = brandName.trim() || "BRAND";
+  const brand = design.brandUppercase ? brandRaw.toUpperCase() : brandRaw;
   const [line1, line2] = splitCtaText(ctaText.trim() || "Follow our page");
 
   const brandBlock =
-    d.showBrand || d.showIcon ? (
+    design.showBrand || design.showIcon ? (
       <div
-        className="flex min-w-0 flex-1 items-center"
+        className="flex min-w-0 items-center"
         style={{ gap: dims.gapIconBrand }}
       >
-        {d.showIcon ? (
-          <StorefrontIcon size={dims.iconSize} color={d.iconColor} />
+        {design.showIcon ? (
+          <StorefrontIcon
+            size={dims.iconSize}
+            color={design.iconColor || design.textColor}
+          />
         ) : null}
-        {d.showBrand ? (
+        {design.showBrand ? (
           <span
             style={{
               fontSize: dims.brandFs,
-              color: d.textColor,
+              color: design.textColor,
               lineHeight: 1.15,
-              fontWeight: d.brandBold ? 700 : 500,
-              letterSpacing: d.brandUppercase ? "0.02em" : undefined,
-              // Full brand when width allows — wrap / slight shrink, never truncate.
+              fontWeight: design.brandBold ? 700 : 500,
+              letterSpacing: design.brandUppercase ? "0.02em" : undefined,
               whiteSpace: "normal",
               overflowWrap: "anywhere",
               wordBreak: "break-word",
@@ -464,7 +350,7 @@ export default function CtaPreview({
     ) : null;
 
   const qrBlock = (
-    <div className="flex shrink-0 items-center" style={{ gap: dims.gapQrText }}>
+    <div className="flex min-w-0 items-center" style={{ gap: dims.gapQrText }}>
       {qrDataUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -480,15 +366,15 @@ export default function CtaPreview({
           style={{
             width: dims.qrSize,
             height: dims.qrSize,
-            borderColor: d.borderColor,
+            borderColor: design.borderColor,
           }}
           aria-hidden
         />
       )}
-      {d.showCtaText ? (
+      {design.showCtaText ? (
         <div
-          className="leading-tight"
-          style={{ fontSize: dims.ctaFs, color: d.textColor }}
+          className="min-w-0 leading-tight"
+          style={{ fontSize: dims.ctaFs, color: design.textColor }}
         >
           <div>{line1}</div>
           {line2 ? <div>{line2}</div> : null}
@@ -497,23 +383,24 @@ export default function CtaPreview({
     </div>
   );
 
-  const divider = d.showDivider ? (
+  const divider = design.showDivider ? (
     <div
       className="shrink-0 self-stretch"
       style={{
+        backgroundColor: design.borderColor,
         width: Math.max(dims.borderW, 1),
-        backgroundColor: d.borderColor,
         marginTop: dims.dividerInset,
         marginBottom: dims.dividerInset,
-        marginLeft: dims.gapSections / 2,
-        marginRight: dims.gapSections / 2,
+        marginLeft: dims.gapAfterBrand,
+        marginRight: dims.gapAfterDivider,
       }}
     />
   ) : (
-    <div className="shrink-0" style={{ width: dims.gapSections }} />
+    <div
+      className="shrink-0"
+      style={{ width: dims.gapAfterBrand + dims.gapAfterDivider }}
+    />
   );
-
-  const sizeCaption = `${page.caption} · ${page.dimLabel}`;
 
   return (
     <div className="w-full">
@@ -521,7 +408,7 @@ export default function CtaPreview({
         <p className="text-xs font-medium uppercase tracking-wide text-[var(--muted)]">
           Live preview
         </p>
-        <p className="text-xs text-[var(--muted)]">{sizeCaption}</p>
+        <p className="text-xs text-[var(--muted)]">{preset.caption}</p>
       </div>
 
       <div className="max-h-[min(78vh,820px)] overflow-auto rounded-md border border-[var(--border)] bg-[#e8e8e8] p-3 shadow-sm">
@@ -536,17 +423,10 @@ export default function CtaPreview({
           <div
             className="min-h-0 flex-1 overflow-hidden"
             style={{
-              paddingTop: pt(isThermal ? 12 : 16),
-              paddingLeft: dims.sidePad,
-              paddingRight: dims.sidePad,
-              paddingBottom: pt(6),
+              padding: `${pt(18)}px ${dims.sidePad}px ${pt(8)}px`,
             }}
           >
-            {isThermal ? (
-              <ThermalBody soldBy={brand} />
-            ) : (
-              <InvoiceBody soldBy={brand} />
-            )}
+            {preset.compact ? <ShippingLabelBody /> : <TaxInvoiceBody />}
           </div>
 
           <div
@@ -558,21 +438,20 @@ export default function CtaPreview({
             }}
           >
             <div
-              className="flex items-center"
+              className="flex items-center overflow-visible"
               style={{
                 width: dims.barW,
                 height: dims.barH,
                 borderRadius: dims.radius,
-                backgroundColor: d.backgroundColor,
-                borderColor: d.borderColor,
+                backgroundColor: design.backgroundColor,
+                borderColor: design.borderColor,
                 borderWidth: dims.borderW,
-                borderStyle: d.borderWidth > 0 ? "solid" : "none",
+                borderStyle: design.borderWidth > 0 ? "solid" : "none",
                 paddingLeft: dims.innerPadX,
                 paddingRight: dims.innerPadX,
-                boxSizing: "border-box",
               }}
             >
-              {d.layout === "qr-left" ? (
+              {design.layout === "qr-left" ? (
                 <>
                   {qrBlock}
                   {divider}

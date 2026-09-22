@@ -2,6 +2,37 @@
 
 export type PreviewPageSize = "a4-invoice" | "thermal-4x6";
 
+/** Full-page preview mocks (true PDF pt proportions). */
+export const LABEL_SIZE_PRESETS = {
+  "a4-invoice": {
+    id: "a4-invoice" as const,
+    label: "A4 tax invoice (Meesho/Flipkart)",
+    caption: "Test order · A4 210×297 mm",
+    widthPt: 595,
+    heightPt: 842,
+    compact: false,
+  },
+  a5: {
+    id: "a5" as const,
+    label: "A5",
+    caption: "Test page · A5 148×210 mm",
+    widthPt: 420,
+    heightPt: 595,
+    compact: true,
+  },
+  "label-4x6": {
+    id: "label-4x6" as const,
+    label: "4×6 in shipping label",
+    caption: "Test label · 4×6 in",
+    widthPt: 288,
+    heightPt: 432,
+    compact: true,
+  },
+} as const;
+
+export type LabelSizeId = keyof typeof LABEL_SIZE_PRESETS;
+
+/** Stored design field — maps onto LABEL_SIZE_PRESETS for the live preview. */
 export const PREVIEW_PAGE_SIZES = {
   "a4-invoice": {
     id: "a4-invoice" as const,

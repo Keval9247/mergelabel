@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   DEFAULT_CTA_DESIGN,
-  LABEL_SIZE_PRESETS,
   mergeCtaDesign,
   type CtaDesign,
   type CtaLayout,
@@ -193,9 +192,7 @@ export default function CtaDesignEditor({
   }
 
   const previewSizeValue: LabelSizeId =
-    design.previewLabelSize in LABEL_SIZE_PRESETS
-      ? design.previewLabelSize
-      : DEFAULT_CTA_DESIGN.previewLabelSize;
+    design.previewPageSize === "thermal-4x6" ? "label-4x6" : "a4-invoice";
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-sm">
@@ -242,6 +239,24 @@ export default function CtaDesignEditor({
                 disabled={busy}
                 onChange={(textColor) => patch({ textColor })}
               />
+              <ColorRow
+                label="Icon"
+                value={design.iconColor}
+                disabled={busy}
+                onChange={(iconColor) => patch({ iconColor })}
+              />
+              <ColorRow
+                label="QR dark"
+                value={design.qrDarkColor}
+                disabled={busy}
+                onChange={(qrDarkColor) => patch({ qrDarkColor })}
+              />
+              <ColorRow
+                label="QR light"
+                value={design.qrLightColor}
+                disabled={busy}
+                onChange={(qrLightColor) => patch({ qrLightColor })}
+              />
             </div>
           </section>
 
@@ -253,6 +268,12 @@ export default function CtaDesignEditor({
                 checked={design.showIcon}
                 disabled={busy}
                 onChange={(showIcon) => patch({ showIcon })}
+              />
+              <ToggleRow
+                label="Show brand"
+                checked={design.showBrand}
+                disabled={busy}
+                onChange={(showBrand) => patch({ showBrand })}
               />
               <ToggleRow
                 label="Show divider"
@@ -271,6 +292,12 @@ export default function CtaDesignEditor({
                 checked={design.brandUppercase}
                 disabled={busy}
                 onChange={(brandUppercase) => patch({ brandUppercase })}
+              />
+              <ToggleRow
+                label="Brand bold"
+                checked={design.brandBold}
+                disabled={busy}
+                onChange={(brandBold) => patch({ brandBold })}
               />
             </div>
           </section>
@@ -418,12 +445,21 @@ export default function CtaDesignEditor({
               />
               <SliderRow
                 label="Gap after brand"
-                value={design.gapSections}
+                value={design.gapAfterBrand}
                 min={0}
                 max={40}
                 unit=" pt"
                 disabled={busy}
-                onChange={(gapSections) => patch({ gapSections })}
+                onChange={(gapAfterBrand) => patch({ gapAfterBrand })}
+              />
+              <SliderRow
+                label="Gap after divider"
+                value={design.gapAfterDivider}
+                min={0}
+                max={40}
+                unit=" pt"
+                disabled={busy}
+                onChange={(gapAfterDivider) => patch({ gapAfterDivider })}
               />
               <SliderRow
                 label="Gap QR · text"
@@ -453,9 +489,13 @@ export default function CtaDesignEditor({
               <select
                 value={previewSizeValue}
                 disabled={busy}
-                onChange={(e) =>
-                  patch({ previewLabelSize: e.target.value as LabelSizeId })
-                }
+                onChange={(e) => {
+                  const id = e.target.value as LabelSizeId;
+                  patch({
+                    previewPageSize:
+                      id === "a4-invoice" ? "a4-invoice" : "thermal-4x6",
+                  });
+                }}
                 className={inputClass}
               >
                 {PREVIEW_SIZE_OPTIONS.map((opt) => (
@@ -463,11 +503,6 @@ export default function CtaDesignEditor({
                     {opt.label}
                   </option>
                 ))}
-                {previewSizeValue === "a5" ? (
-                  <option value="a5">
-                    {LABEL_SIZE_PRESETS.a5.label}
-                  </option>
-                ) : null}
               </select>
             </label>
           </section>
