@@ -1,8 +1,32 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Core product tokens — light professional theme (seller tool) */
+  --background: #f4f7f4;
+  --foreground: #14201a;
+  --page-bg: #f4f7f4;
+  --surface: #ffffff;
+  --surface-muted: #eef3ef;
+  --border: #d4ddd6;
+  --muted: #5c6b62;
+  --accent: #1f6b3a;
+  --accent-hover: #185730;
+  --accent-soft: #e8f3ec;
+  --accent-ring: color-mix(in srgb, var(--accent) 28%, transparent);
+  --hero-wash: color-mix(in srgb, var(--accent) 14%, transparent);
+  --danger: #a12a2a;
+  --danger-soft: #fceeee;
+  --danger-border: #e8b4b4;
+
+  /* Settings aliases → same product tokens (Home & Stores one look) */
+  --settings-bg: var(--page-bg);
+  --settings-fg: var(--foreground);
+  --settings-muted: var(--muted);
+  --settings-border: var(--border);
+  --settings-panel: var(--surface);
+  --settings-input: var(--surface);
+  --settings-accent: var(--accent);
+  --settings-accent-soft: var(--accent-soft);
 }
 
 @theme inline {
@@ -12,15 +36,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* Force light theme: do not flip tokens under prefers-color-scheme: dark */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
