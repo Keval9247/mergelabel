@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import QRCode from "qrcode";
 import {
   LABEL_SIZE_PRESETS,
   type CtaDesign,
@@ -253,24 +252,32 @@ export default function CtaPreview({
       return;
     }
 
-    void QRCode.toDataURL(url, {
-      errorCorrectionLevel: "M",
-      margin: 1,
-      width: 256,
-      color: {
-        dark: design.qrDarkColor || "#000000",
-        light: design.qrLightColor || "#ffffff",
-      },
-    })
-      .then((dataUrl) => {
-        if (!cancelled) setQrDataUrl(dataUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setQrDataUrl(null);
-      });
+    // Debounce while the user types URL / tweaks QR colors in the editor.
+    const timer = window.setTimeout(() => {
+      void import("qrcode")
+        .then((mod) => {
+          const QRCode = mod.default ?? mod;
+          return QRCode.toDataURL(url, {
+            errorCorrectionLevel: "M",
+            margin: 1,
+            width: 128,
+            color: {
+              dark: design.qrDarkColor || "#000000",
+              light: design.qrLightColor || "#ffffff",
+            },
+          });
+        })
+        .then((dataUrl) => {
+          if (!cancelled) setQrDataUrl(dataUrl);
+        })
+        .catch(() => {
+          if (!cancelled) setQrDataUrl(null);
+        });
+    }, 160);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [ctaUrl, design.qrDarkColor, design.qrLightColor]);
 

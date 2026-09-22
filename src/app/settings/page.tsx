@@ -1,7 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import CtaDesignEditor from "@/components/CtaDesignEditor";
 import StoreForm, {
   emptyStoreForm,
   type StoreFormValues,
@@ -9,6 +9,15 @@ import StoreForm, {
 import type { CtaDesign } from "@/lib/cta-design";
 import type { StorePlatform } from "@/lib/store-constants";
 import { notify } from "@/lib/toast";
+
+const CtaDesignEditor = dynamic(() => import("@/components/CtaDesignEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-5 py-10 text-center text-sm text-[var(--muted)]">
+      Loading design editor…
+    </div>
+  ),
+});
 
 type Store = {
   _id: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
   DEFAULT_CTA_DESIGN,
@@ -9,7 +10,15 @@ import {
   type LabelSizeId,
 } from "@/lib/cta-design";
 import { notify } from "@/lib/toast";
-import CtaPreview from "@/components/CtaPreview";
+
+const CtaPreview = dynamic(() => import("@/components/CtaPreview"), {
+  ssr: false,
+  loading: () => (
+    <div className="rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-10 text-center text-sm text-[var(--muted)]">
+      Loading preview…
+    </div>
+  ),
+});
 
 type CtaDesignEditorProps = {
   brandName: string;

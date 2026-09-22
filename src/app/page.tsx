@@ -1,4 +1,15 @@
-import LabelGenerator from "@/components/LabelGenerator";
+"use client";
+
+import dynamic from "next/dynamic";
+
+const LabelGenerator = dynamic(() => import("@/components/LabelGenerator"), {
+  ssr: false,
+  loading: () => (
+    <div className="border-t border-[var(--border)] py-10 text-center">
+      <p className="text-sm text-[var(--muted)]">Loading generator…</p>
+    </div>
+  ),
+});
 
 export default function Home() {
   return (

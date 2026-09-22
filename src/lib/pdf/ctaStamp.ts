@@ -22,13 +22,23 @@ function toRgb(hex: string): RGB {
   return rgb(r, g, b);
 }
 
+/** Keep the UI responsive while processing large batches. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
 /**
  * Stamp a bottom CTA bar onto every page of each PDF, then merge into one PDF.
  * Designed for client-side use (browser-compatible APIs).
+ *
+ * Strategy: copy all pages into one document first, then embed fonts/QR once
+ * and stamp — much faster than re-embedding per source file.
  */
 export async function stampAndMergePdfs(
   files: ArrayBuffer[],
-  options: CtaOptions
+  options: CtaOptions,
 ): Promise<Uint8Array> {
   if (!files.length) {
     throw new Error("No PDF files provided");
@@ -42,43 +52,53 @@ export async function stampAndMergePdfs(
   const brandName = design.brandUppercase ? brandRaw.toUpperCase() : brandRaw;
   const ctaText =
     (options.ctaText ?? "Follow our page").trim() || "Follow our page";
-  const qrPngBytes = await qrDataUrlToPngBytes(options.ctaUrl.trim(), design);
 
-  const merged = await PDFDocument.create();
+  const [qrPngBytes, merged] = await Promise.all([
+    qrDataUrlToPngBytes(options.ctaUrl.trim(), design),
+    PDFDocument.create(),
+  ]);
 
-  for (const file of files) {
-    const src = await PDFDocument.load(file, { ignoreEncryption: true });
-    const font = await src.embedFont(StandardFonts.Helvetica);
-    const fontBold = await src.embedFont(StandardFonts.HelveticaBold);
-    const qrImage = await src.embedPng(qrPngBytes);
-
-    for (const page of src.getPages()) {
-      drawCtaBar(page, {
-        brandName,
-        ctaText,
-        font,
-        fontBold,
-        qrImage,
-        design,
-      });
-    }
-
-    const indices = src.getPageIndices();
-    const copied = await merged.copyPages(src, indices);
+  for (let i = 0; i < files.length; i++) {
+    const src = await PDFDocument.load(files[i], { ignoreEncryption: true });
+    const copied = await merged.copyPages(src, src.getPageIndices());
     for (const page of copied) {
       merged.addPage(page);
     }
+    // Free source ASAP; yield so the loading spinner can paint between files.
+    if (i < files.length - 1) {
+      await yieldToMain();
+    }
   }
 
-  return merged.save();
+  const [font, fontBold, qrImage] = await Promise.all([
+    merged.embedFont(StandardFonts.Helvetica),
+    merged.embedFont(StandardFonts.HelveticaBold),
+    merged.embedPng(qrPngBytes),
+  ]);
+
+  const pages = merged.getPages();
+  for (let i = 0; i < pages.length; i++) {
+    drawCtaBar(pages[i], {
+      brandName,
+      ctaText,
+      font,
+      fontBold,
+      qrImage,
+      design,
+    });
+    if (i > 0 && i % 8 === 0) {
+      await yieldToMain();
+    }
+  }
+
+  // Object streams are slower to build in the browser for typical label counts.
+  return merged.save({ useObjectStreams: false });
 }
 
 /** Trigger a browser download of PDF bytes. */
 export function downloadPdf(bytes: Uint8Array, filename: string): void {
-  const copy = Uint8Array.from(bytes);
-  const blob = new Blob([copy.buffer as ArrayBuffer], {
-    type: "application/pdf",
-  });
+  const copy = new Uint8Array(bytes);
+  const blob = new Blob([copy], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -91,27 +111,22 @@ export function downloadPdf(bytes: Uint8Array, filename: string): void {
 
 async function qrDataUrlToPngBytes(
   url: string,
-  design: CtaDesign
+  design: CtaDesign,
 ): Promise<Uint8Array> {
+  // QR is drawn small on labels; 160px is enough and much cheaper than 256.
+  const pixelSize = Math.min(192, Math.max(128, Math.round(design.qrSize * 3)));
   const dataUrl = await QRCode.toDataURL(url, {
     errorCorrectionLevel: "M",
     margin: 1,
-    width: 256,
+    width: pixelSize,
     color: {
       dark: design.qrDarkColor,
       light: design.qrLightColor,
     },
   });
-  const base64 = dataUrl.split(",")[1];
-  if (!base64) {
-    throw new Error("Failed to generate QR code");
-  }
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
+
+  const response = await fetch(dataUrl);
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 function drawCtaBar(
@@ -123,7 +138,7 @@ function drawCtaBar(
     fontBold: PDFFont;
     qrImage: PDFImage;
     design: CtaDesign;
-  }
+  },
 ): void {
   const { width: pageWidth } = page.getSize();
   const d = ctx.design;
@@ -141,7 +156,7 @@ function drawCtaBar(
   const ctaTextWidth = d.showCtaText
     ? Math.max(
         ctx.font.widthOfTextAtSize(ctaLine1, d.ctaFontSize),
-        ctaLine2 ? ctx.font.widthOfTextAtSize(ctaLine2, d.ctaFontSize) : 0
+        ctaLine2 ? ctx.font.widthOfTextAtSize(ctaLine2, d.ctaFontSize) : 0,
       )
     : 0;
   const ctaLineHeight = d.ctaFontSize + 2;
@@ -177,7 +192,7 @@ function drawCtaBar(
     d.cornerRadius,
     bg,
     border,
-    d.borderWidth
+    d.borderWidth,
   );
 
   const midY = boxY + boxHeight / 2;
@@ -285,7 +300,7 @@ function drawRoundedRect(
   r: number,
   fill: RGB,
   stroke: RGB,
-  borderWidth: number
+  borderWidth: number,
 ): void {
   const radius = Math.min(r, w / 2, h / 2);
   const path = [
@@ -320,7 +335,7 @@ function drawStorefrontIcon(
   y: number,
   size: number,
   strokeColor: RGB,
-  fillColor: RGB
+  fillColor: RGB,
 ): void {
   const stroke = Math.max(1, size * 0.04);
   const s = size;
@@ -371,6 +386,6 @@ function drawStorefrontIcon(
       borderColor: strokeColor,
       borderWidth: stroke,
       color: fillColor,
-    }
+    },
   );
 }

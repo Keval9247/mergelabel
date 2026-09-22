@@ -9,7 +9,6 @@ import {
   type ReactNode,
 } from "react";
 import type { CtaDesign } from "@/lib/cta-design";
-import { stampAndMergePdfs } from "@/lib/pdf/ctaStamp";
 import { notify } from "@/lib/toast";
 import FileDropzone from "./FileDropzone";
 
@@ -157,7 +156,11 @@ export default function LabelGenerator() {
     const loadingId = notify.loading("Generating merged PDF…");
 
     try {
-      const buffers = await Promise.all(files.map((f) => f.arrayBuffer()));
+      // Load heavy pdf-lib / qrcode only when generating (keeps first paint small).
+      const [{ stampAndMergePdfs }, buffers] = await Promise.all([
+        import("@/lib/pdf/ctaStamp"),
+        Promise.all(files.map((f) => f.arrayBuffer())),
+      ]);
       const merged = await stampAndMergePdfs(buffers, {
         brandName: brandOverride.trim(),
         ctaUrl: ctaUrlOverride.trim(),

@@ -173,6 +173,8 @@ const StoreSchema = new Schema(
   { timestamps: true },
 );
 
+StoreSchema.index({ isDefault: -1, name: 1 });
+
 export type StoreDocument = InferSchemaType<typeof StoreSchema> & {
   _id: mongoose.Types.ObjectId;
 };

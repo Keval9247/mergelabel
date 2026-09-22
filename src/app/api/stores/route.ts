@@ -17,13 +17,24 @@ type StoreBody = {
 export async function GET() {
   try {
     await dbConnect();
-    const stores = await Store.find().sort({ isDefault: -1, name: 1 }).lean();
+    const stores = await Store.find()
+      .sort({ isDefault: -1, name: 1 })
+      .select("-__v")
+      .lean();
     return NextResponse.json(
       stores.map((s) => ({
         ...s,
         _id: String(s._id),
-        design: mergeCtaDesign(s.design as Partial<CtaDesign> | null | undefined),
+        design: mergeCtaDesign(
+          s.design as Partial<CtaDesign> | null | undefined,
+        ),
       })),
+      {
+        headers: {
+          // Short private cache speeds repeat visits; mutations still invalidate via refetch.
+          "Cache-Control": "private, max-age=15, stale-while-revalidate=60",
+        },
+      },
     );
   } catch (error) {
     const message =
